@@ -1,0 +1,1 @@
+cmd_/home/coldfunction/linux_kernel_testing/hello.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/coldfunction/linux_kernel_testing/hello.ko /home/coldfunction/linux_kernel_testing/hello.o /home/coldfunction/linux_kernel_testing/hello.mod.o
