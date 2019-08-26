@@ -7,14 +7,30 @@
 #include <linux/mm.h>
 #include <linux/highmem.h>
 #include <asm/fpu/internal.h>
+#include <linux/smp.h>
+#include <linux/kthread.h>
+#include <linux/sched.h>
+
 MODULE_LICENSE("Dual BSD/GPL");
 
+
+#define THREAD_NUM 2
 
 typedef struct __attribute__((__packed__)) c16x8_header {
     __u64 gfn;
     __u32 size;
     __u8 h[16];
 } c16x8_header_t;
+
+static struct task_struct *cmp_tsk[4];
+
+
+static inline s64 time_in_us(void) {
+      ktime_t val;
+      val = ktime_get();
+      return ktime_to_ns(val) / 1000;
+}
+
 
 
 static inline int memcmp_avx_32(uint8_t *a, uint8_t *b)
@@ -37,7 +53,7 @@ static inline int memcmp_avx_32(uint8_t *a, uint8_t *b)
 struct page **mypage1;
 struct page **mypage2;
 static void hello_exit(void);
-
+static int myid[4];
 
 static int diff(struct page *page1, struct page *page2)
 {
@@ -53,19 +69,17 @@ static int diff(struct page *page1, struct page *page2)
 	header = (c16x8_header_t *)buf;
 	block = buf + sizeof(*header);
 
-	printk("ready to compress\n");
+//	printk("ready to compress\n");
     kernel_fpu_begin();
     for (i = 0; i < 4096; i += 32) {
     	if (memcmp_avx_32(backup + i, page + i)) {
         	header->h[i / 256] |= (1 << ((i % 256) / 32));
             memcpy(block, page + i, 32);
             block += 32;
-			printk("compress okok\n");
         }
     }
     kernel_fpu_end();
 
-	printk("after compress1\n");
 
 	if (block == buf + sizeof(*header)) {
     	memset(header->h, 0xff, 16 * sizeof(__u8));
@@ -73,7 +87,6 @@ static int diff(struct page *page1, struct page *page2)
         block += 4096;
     }
 
-	printk("after compress2\n");
 
     kunmap_atomic(backup);
     kunmap_atomic(page);
@@ -82,12 +95,37 @@ static int diff(struct page *page1, struct page *page2)
 		return 0;
 
 	header->size = sizeof(header->h) + (block - (buf + sizeof(*header)));
-	int ret = block-buf;
+	//int ret = block-buf;
+	int ret = block-buf-sizeof(*header);
 	kfree(buf);
 
 	return ret;
 
 }
+
+static int compress_dirty_bytes(void)
+{
+	int len = 0;
+	int i,j;
+
+	s64 start = time_in_us();
+    for(i = 0; i < 128; i++) {
+        for(j = 0; j < 1024; j++) {
+			len += diff(mypage1[i]+j, mypage2[i]+j);
+		}
+	}
+	s64 end = time_in_us();
+	printk("totoal diff len = %d, time = %ld, difftime = %d, rate = %d\n", len, time_in_us(), end-start, len/(end-start));
+}
+
+static int calc_dirty_bytes(void *arg)
+{
+	int *id = (int*) arg;
+	printk("cocotion test id = %d, time = %ld\n", *id, time_in_us());
+	compress_dirty_bytes();
+	return 0;
+}
+
 
 
 static int hello_init(void)
@@ -124,51 +162,34 @@ static int hello_init(void)
 
     printk("random generating okokok\n");
 
-	int len = 0;
-    for(i = 0; i < 128; i++) {
-        for(j = 0; j < 1024; j++) {
-			len += diff(mypage1[i]+j, mypage2[i]+j);
+
+	int ret;
+	for(i = 0; i < THREAD_NUM; i++) {
+
+		myid[i] = i;
+		cmp_tsk[i] = kthread_create(calc_dirty_bytes, &myid[i], "cmp thread");
+		if(IS_ERR(cmp_tsk[i])) {
+			ret = PTR_ERR(cmp_tsk[i]);
+			cmp_tsk[i] = NULL;
+			goto out;
 		}
+		kthread_bind(cmp_tsk[i], 7-i);
 	}
 
-	printk("totoal diff len = %d\n", len);
 
+	for(i = 0; i < THREAD_NUM; i++) {
+		printk("wakeup %d time = %ld\n", i, time_in_us());
+		wake_up_process(cmp_tsk[i]);
+	}
+	printk("wait completing time = %ld\n", time_in_us());
+	//	smp_call_function_single(7, calc_dirty_bytes, 0, true);
+//	smp_call_function_single(7, calc_dirty_bytes, 1, true);
 
-
-
-
-	/*
-
-    for(i = 0; i < 128; i++) {
-        for(j = 0; j < 1024; j++) {
-            char *backup = kmap_atomic(mypage[i]+j);
-            if(j == 0 && i == 0) {
-                for(k = 0; k < 1024; k++) {
-                    int c = *(int*)(backup+4*k);
-                    printk("%d %d, ", k, c);
-                }
-                printk("\n");
-            }
-            kunmap_atomic(backup);
-        }
-    }
-*/
-
-
-
-//    printk("page size = %d\n", sizeof(struct page));
-//    page = kmap_atomic(mypage[0]);
-
- //   printk("after %d, %d, %d, %d\n", *(int*)(page), *(int*)(page+4), *(int*)(page+8), *(int*)(page+12));
-  //  kunmap_atomic(page);
-
-   // kunmap_atomic(page);
-//    for(i = 0; i < 128; i++) {
- //       get_random_bytes(mypage[i], 4096*1024);
-  //  }
-   // printk("%d, %d, %d, %d\n", *(int*)(mypage[0]), *(int*)(mypage[0]+4), *(int*)(mypage[0]+8), *(int*)(mypage[0]+12));
 
     return 0;
+
+out:
+	return ret;
 
 }
 

@@ -893,6 +893,7 @@ deps_/home/coldfunction/linux_kernel_testing/hello.o := \
   arch/x86/include/asm/user32.h \
   arch/x86/include/asm/fpu/api.h \
   arch/x86/include/asm/fpu/xstate.h \
+  include/linux/kthread.h \
 
 /home/coldfunction/linux_kernel_testing/hello.o: $(deps_/home/coldfunction/linux_kernel_testing/hello.o)
 
