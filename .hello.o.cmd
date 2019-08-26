@@ -870,6 +870,29 @@ deps_/home/coldfunction/linux_kernel_testing/hello.o := \
   arch/x86/include/asm/cacheflush.h \
     $(wildcard include/config/debug/rodata/test.h) \
   include/asm-generic/cacheflush.h \
+  arch/x86/include/asm/fpu/internal.h \
+    $(wildcard include/config/x86/debug/fpu.h) \
+    $(wildcard include/config/as/fxsaveq.h) \
+  include/linux/compat.h \
+    $(wildcard include/config/compat/old/sigaction.h) \
+    $(wildcard include/config/odd/rt/sigaction.h) \
+  include/linux/socket.h \
+  include/asm/socket.h \
+  include/asm-generic/socket.h \
+  include/asm/sockios.h \
+  include/asm-generic/sockios.h \
+  include/linux/sockios.h \
+  include/linux/uio.h \
+  include/uapi/linux/uio.h \
+  include/uapi/linux/socket.h \
+  include/linux/if.h \
+  include/linux/libc-compat.h \
+  include/linux/hdlc/ioctl.h \
+  include/linux/aio_abi.h \
+  arch/x86/include/asm/compat.h \
+  arch/x86/include/asm/user32.h \
+  arch/x86/include/asm/fpu/api.h \
+  arch/x86/include/asm/fpu/xstate.h \
 
 /home/coldfunction/linux_kernel_testing/hello.o: $(deps_/home/coldfunction/linux_kernel_testing/hello.o)
 
