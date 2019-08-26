@@ -14,7 +14,7 @@
 MODULE_LICENSE("Dual BSD/GPL");
 
 
-#define THREAD_NUM 2
+#define THREAD_NUM 3
 
 typedef struct __attribute__((__packed__)) c16x8_header {
     __u64 gfn;
@@ -22,7 +22,7 @@ typedef struct __attribute__((__packed__)) c16x8_header {
     __u8 h[16];
 } c16x8_header_t;
 
-static struct task_struct *cmp_tsk[4];
+static struct task_struct *cmp_tsk[THREAD_NUM];
 
 
 static inline s64 time_in_us(void) {
@@ -50,10 +50,10 @@ static inline int memcmp_avx_32(uint8_t *a, uint8_t *b)
 
 
 
-struct page **mypage1;
-struct page **mypage2;
+struct page **mypage1[THREAD_NUM];
+struct page **mypage2[THREAD_NUM];
 static void hello_exit(void);
-static int myid[4];
+static int myid[THREAD_NUM];
 
 static int diff(struct page *page1, struct page *page2)
 {
@@ -103,7 +103,7 @@ static int diff(struct page *page1, struct page *page2)
 
 }
 
-static int compress_dirty_bytes(void)
+static int compress_dirty_bytes(int id)
 {
 	int len = 0;
 	int i,j;
@@ -111,7 +111,7 @@ static int compress_dirty_bytes(void)
 	s64 start = time_in_us();
     for(i = 0; i < 128; i++) {
         for(j = 0; j < 1024; j++) {
-			len += diff(mypage1[i]+j, mypage2[i]+j);
+			len += diff(mypage1[id][i]+j, mypage2[id][i]+j);
 		}
 	}
 	s64 end = time_in_us();
@@ -122,7 +122,7 @@ static int calc_dirty_bytes(void *arg)
 {
 	int *id = (int*) arg;
 	printk("cocotion test id = %d, time = %ld\n", *id, time_in_us());
-	compress_dirty_bytes();
+	compress_dirty_bytes(*id);
 	return 0;
 }
 
@@ -131,34 +131,46 @@ static int calc_dirty_bytes(void *arg)
 static int hello_init(void)
 {
     printk(KERN_INFO "Hello kernel\n");
-    mypage1 = kmalloc(sizeof(struct page*)*128, GFP_KERNEL | __GFP_ZERO);
-    mypage2 = kmalloc(sizeof(struct page*)*128, GFP_KERNEL | __GFP_ZERO);
-
     int i,j,k;
-    for(i = 0; i < 128; i++) {
-        mypage1[i] = alloc_pages(GFP_KERNEL | __GFP_ZERO, 10);
-        mypage2[i] = alloc_pages(GFP_KERNEL | __GFP_ZERO, 10);
-        if(mypage1[i] == NULL) {
-            hello_exit() ;
-        }
-        if(mypage2[i] == NULL) {
-            hello_exit() ;
-        }
-    }
-    for(i = 0; i < 128; i++) {
-        for(j = 0; j < 1024; j++) {
-            char *page = kmap_atomic(mypage1[i]+j);
-            get_random_bytes(page, 4096);
-            kunmap_atomic(page);
-        }
-    }
-    for(i = 0; i < 128; i++) {
-        for(j = 0; j < 1024; j++) {
-            char *page = kmap_atomic(mypage2[i]+j);
-            get_random_bytes(page, 4096);
-            kunmap_atomic(page);
-        }
-    }
+
+	for(i = 0; i < THREAD_NUM; i++) {
+    	mypage1[i] = kmalloc(sizeof(struct page*)*128, GFP_KERNEL | __GFP_ZERO);
+    	mypage2[i] = kmalloc(sizeof(struct page*)*128, GFP_KERNEL | __GFP_ZERO);
+	}
+
+	for(j = 0; j < THREAD_NUM; j++) {
+	    for(i = 0; i < 128; i++) {
+ 	    	mypage1[j][i] = alloc_pages(GFP_KERNEL | __GFP_ZERO, 10);
+        	mypage2[j][i] = alloc_pages(GFP_KERNEL | __GFP_ZERO, 10);
+        	if(mypage1[j][i] == NULL) {
+            	hello_exit() ;
+        	}
+        	if(mypage2[j][i] == NULL) {
+            	hello_exit() ;
+        	}
+    	}
+	}
+
+
+	for(k = 0; k < THREAD_NUM; k++) {
+    	for(i = 0; i < 128; i++) {
+        	for(j = 0; j < 1024; j++) {
+            	char *page = kmap_atomic(mypage1[k][i]+j);
+            	get_random_bytes(page, 4096);
+            	kunmap_atomic(page);
+        	}
+    	}
+	}
+
+	for(k = 0; k < THREAD_NUM; k++) {
+    	for(i = 0; i < 128; i++) {
+        	for(j = 0; j < 1024; j++) {
+            	char *page = kmap_atomic(mypage2[k][i]+j);
+            	get_random_bytes(page, 4096);
+            	kunmap_atomic(page);
+        	}
+    	}
+	}
 
     printk("random generating okokok\n");
 
@@ -195,14 +207,18 @@ out:
 
 static void hello_exit(void)
 {
-        printk(KERN_INFO "Goodbye\n");
-        int i;
+    printk(KERN_INFO "Goodbye\n");
+    int i,j;
+	for(j = 0; j < THREAD_NUM; j++) {
         for(i = 0; i < 128; i++) {
-            if(mypage1[i]!=NULL)
-                __free_pages(mypage1[i], 10);
-                __free_pages(mypage2[i], 10);
+            if(mypage1[j][i]!=NULL)
+                __free_pages(mypage1[j][i], 10);
+            if(mypage2[j][i]!=NULL)
+                __free_pages(mypage2[j][i], 10);
         }
-        kfree(mypage1);
+        kfree(mypage1[j]);
+        kfree(mypage2[j]);
+	}
 }
 
 module_init(hello_init);

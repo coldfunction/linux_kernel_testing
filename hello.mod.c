@@ -19,8 +19,8 @@ __used
 __attribute__((section("__versions"))) = {
 	{ 0x78921aca, __VMLINUX_SYMBOL_STR(module_layout) },
 	{ 0x6a5b5422, __VMLINUX_SYMBOL_STR(wake_up_process) },
-	{ 0xe296f5a6, __VMLINUX_SYMBOL_STR(kthread_bind) },
 	{ 0x3eedcbb0, __VMLINUX_SYMBOL_STR(kthread_create_on_node) },
+	{ 0xe296f5a6, __VMLINUX_SYMBOL_STR(kthread_bind) },
 	{ 0x79aa04a2, __VMLINUX_SYMBOL_STR(get_random_bytes) },
 	{ 0x67b7090d, __VMLINUX_SYMBOL_STR(alloc_pages_current) },
 	{ 0xeb3bce7d, __VMLINUX_SYMBOL_STR(kmem_cache_alloc_trace) },
@@ -43,4 +43,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "FC1C3D6564660E4A6DCDDB3");
+MODULE_INFO(srcversion, "279AD763C9364680671C673");
